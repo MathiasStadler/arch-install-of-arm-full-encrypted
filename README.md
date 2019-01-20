@@ -24,6 +24,9 @@ https://github.com/procount/pinn/issues/58
 # encrypted dropbear
 https://raspberrypi.stackexchange.com/questions/67051/raspberry-pi-3-with-archarm-and-encrypted-disk-will-not-boot-how-can-be-identif
 
+
+# another sample for installation script
+https://gist.github.com/rasschaert/0bb7ebc506e26daee585
 ```
 
 ## presteps
@@ -53,11 +56,11 @@ set -e
 
 # delete device we used just overwrite with 0
 # if you have used device delete the old data carefully :-)
-dd if=/dev/zero of=/dev/sda bs=4M status=progress | sync
+dd if=/dev/zero of=/dev/sda bs=4M status=progress count=32| sync
 
 
 # create two filesystem for boot and encrypted root
-fdisk /dfdisk /dev/sda -C32 -H32 <<EOF
+fdisk /dev/sda <<EOF
 o
 n
 p
@@ -65,14 +68,15 @@ p
 
 +2048M
 t
-
+83
 n
 p
 2
 
 
 t
-
+2
+83
 p
 w
 EOF
@@ -83,17 +87,20 @@ VOL_NAME="Vol"
 LVM_DEVICE="/dev/sda2"
 pvcreate $LVM_DEVICE
 vgcreate $VOL_NAME $LVM_DEVICE
-lvcreate -L 10G -n root $VOL_NAME
+lvcreate -L 5G -n root $VOL_NAME
 lvcreate -L 500M -n swap $VOL_NAME
-lvcreate -L 10G -n home $VOL_NAME
+# the rest of space
+lvcreate -l 100%FREE -n home $VOL_NAME
 
 
 # create encrypted device
-cryptsetup luksFormat -c aes-xts-plain64 -s 512 /dev/mapper/$VOL_NAME-root
-cryptsetup open /dev/mapper/$VOL_NAME-root root
+LUKS_PASSWD="password"
+echo -n $LUKS_PASSWD | cryptsetup luksFormat -q -c aes-xts-plain64 -s 512 /dev/mapper/$VOL_NAME-root -
+
+echo -n $LUKS_PASSWD |cryptsetup open /dev/mapper/$VOL_NAME-root root -
 
 
-# mkfs
+# mkfs with -F force option
 mkfs.ext4 /dev/sda1
 mkfs.ext4 /dev/mapper/root
   
@@ -104,11 +111,15 @@ mount /dev/sda1 /mnt/boot
 
 
 # install rsync
-pacman -S rsync
+pacman -S  --noconfirm rsync
 
 
 # copy os to encrypted /root and mounted /boot
+ rsync -aAXv /* /mnt --exclude={/dev/*,/proc/*,/sys/*,/tmp/*,/var/tmp/*,/run/*,/mnt/*,/media/*,/lost+found}
 
+
+# enter chroot
+arch
 
 
 ###SCRIPT_END###

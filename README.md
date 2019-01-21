@@ -54,6 +54,14 @@ echo "Boot script loaded from ${devtype} ${devnum} distro_bootpart=${distro_boot
 
 set -e
 
+export LUKS_PASSWD="password"
+export ROOT_PASSWD="password"
+export TIME_ZINE="EUROPE/BERLIN"
+export HOSTNAME="ENCRYPTED_ROCK64"
+export VOL_NAME="Vol"
+export LVM_DEVICE="/dev/sda2"
+
+
 # delete device we used just overwrite with 0
 # if you have used device delete the old data carefully :-)
 dd if=/dev/zero of=/dev/sda bs=4M status=progress count=32| sync
@@ -83,8 +91,6 @@ EOF
 
 
 # create lvm
-VOL_NAME="Vol"
-LVM_DEVICE="/dev/sda2"
 pvcreate $LVM_DEVICE
 vgcreate $VOL_NAME $LVM_DEVICE
 lvcreate -L 5G -n root $VOL_NAME
@@ -119,7 +125,25 @@ pacman -S  --noconfirm rsync
 
 
 # enter chroot
-arch
+arch-chroot /mnt /bin/bash <<EOF
+echo "Setting and generating locale"
+echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+locale-gen
+export LANG=en_US.UTF-8
+echo "LANG=en_US.UTF-8" >> /etc/locale.conf
+echo "Setting time zone"
+# delete old link
+rm -f /etc/localtime
+ln -s /usr/share/zoneinfo/$TIME_ZONE /etc/localtime
+echo "Setting hostname"
+echo $hostname > /etc/hostname
+sed -i "/localhost/s/$/ $hostname/" /etc/hosts
+echo "Generating initramfs"
+sed -i 's/^HOOKS.*/HOOKS="base udev autodetect modconf block encrypt lvm2 filesystems keyboard fsck"/' /etc/mkinitcpio.conf
+mkinitcpio -p  linux-aarch64
+echo "Setting root password"
+echo "root:${ROOT_PASSWD}" | chpasswd
+EOF
 
 
 ###SCRIPT_END###
@@ -129,6 +153,15 @@ sed -n '/^###SCRIPT_START###/,/^###SCRIPT_END###/p' README.md >arch-install-encr
 
 ```
 
+## mount encrypted devices
+
+```bash
+LUKS_PASSWD="password"
+VOL_NAME="Vol"
+echo -n $LUKS_PASSWD |cryptsetup open /dev/mapper/$VOL_NAME-root root -
+mount /dev/mapper/root /mnt
+mount /dev/sda1 /mnt/boot/
+```
 
 
 ## steps

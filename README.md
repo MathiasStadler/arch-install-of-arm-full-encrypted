@@ -1,7 +1,52 @@
 # arch install of arm full encrypted
 
-[] with dropbear
-[] luks
+- e.g. on rock64
+
+[ ] with dropbear
+[x] lvm
+[x] luks
+
+## TL;DR
+
+- used if available a serial modem, very helpfully in unclear situation
+
+```bash
+sudo  minicom -s -D /dev/ttyUSB0 -b 1500000 --color=on
+```
+
+- plug in a usb storage device that will used as encrypted device
+- enable spi boot on rock64 via flash uboot on spi => [see here](https://github.com/ayufan-rock64/linux-build/blob/master/recipes/flash-spi.md)
+- prepare and boot via sd-card the rock64 => [follow this steps](https://archlinuxarm.org/platforms/armv8/rockchip/rock64#installation)
+- boot from sd card
+- install git and clone this repo in alarm home  
+
+```bash
+pacmann -S git && git clone https://github.com/MathiasStadler/arch-install-of-arm-full-encrypted.git
+```
+
+- create both script with instruction from the README.md
+
+```bash
+# get script into script file
+sed -n '/^###SCRIPT_START_STEP1###/,/^###SCRIPT_END_STEP1###/p' README.md >arch-install-encrypted-STEP-1.sh
+
+sed -n '/^###SCRIPT_START_STEP2###/,/^###SCRIPT_END_STEP2###/p' README.md >arch-install-encrypted-STEP-2.sh
+```
+
+- run both script
+
+```bash
+bash +x arch-install-encrypted-STEP-1.sh
+
+# check the output from fdisk some storage device need a reboot
+
+bash +x arch-install-encrypted-STEP-1.sh
+```
+
+- shutdown thr rock64
+- eject the sd-card and
+- cross the finger and boot the encrypted rock64 from usb mounted device
+- the password was *password* :-)
 
 ## sources
 
@@ -33,14 +78,6 @@ https://gist.github.com/rasschaert/0bb7ebc506e26daee585
 https://bbs.archlinux.org/viewtopic.php?id=243253&p=2
 ```
 
-## presteps
-
-- create a bootable sd card with the last arch for arm
-- check your usb3 interface  and disk are detect
-- check you can write on your disk device
-
-- enable epi boot of rock64 sbc board
-
 ## boot.scr
 
 ```bash
@@ -64,7 +101,6 @@ export TIME_ZINE="EUROPE/BERLIN"
 export HOSTNAME="ENCRYPTED_ROCK64"
 export VOL_NAME="Vol"
 export LVM_DEVICE="/dev/sda2"
-
 
 # delete device we used just overwrite with 0
 # if you have used device delete the old data carefully :-)
@@ -119,16 +155,16 @@ pvcreate $LVM_DEVICE
 vgcreate $VOL_NAME $LVM_DEVICE
 lvcreate -L 5G -n root $VOL_NAME
 lvcreate -L 500M -n swap $VOL_NAME
+
 # the rest of space
 lvcreate -l 100%FREE -n home $VOL_NAME
-
 
 # create encrypted device
 LUKS_PASSWD="password"
 echo -n $LUKS_PASSWD | cryptsetup luksFormat -q -c aes-xts-plain64 -s 512 /dev/mapper/$VOL_NAME-root -
 
+# open encrypted device
 echo -n $LUKS_PASSWD |cryptsetup open /dev/mapper/$VOL_NAME-root root -
-
 
 # mkfs with -F force option
 mkfs.ext4 /dev/sda1
@@ -139,14 +175,11 @@ mount /dev/mapper/root /mnt
 mkdir /mnt/boot
 mount /dev/sda1 /mnt/boot
 
-
 # install rsync
 pacman -S  --noconfirm rsync
 
-
 # copy os to encrypted /root and mounted /boot
  rsync -aAXv /* /mnt --exclude={/dev/*,/proc/*,/sys/*,/tmp/*,/var/tmp/*,/run/*,/mnt/*,/media/*,/lost+found}
-
 
 # enter chroot
 arch-chroot /mnt /bin/bash <<EOF
@@ -170,8 +203,6 @@ echo "root:${ROOT_PASSWD}" | chpasswd
 EOF
 ###SCRIPT_END_STEP2###
 
-
-
 # get script into script file
 sed -n '/^###SCRIPT_START_STEP1###/,/^###SCRIPT_END_STEP1###/p' README.md >arch-install-encrypted-STEP-1.sh
 
@@ -187,130 +218,4 @@ VOL_NAME="Vol"
 echo -n $LUKS_PASSWD |cryptsetup open /dev/mapper/$VOL_NAME-root root -
 mount /dev/mapper/root /mnt
 mount /dev/sda1 /mnt/boot/
-```
-
-
-## steps
-
-```bash
- dhcpcd 
-    2  cd /boot
-    3  ls
-    4  cd dtbs/
-    5  ls
-    6  cd rockchip/
-    7  ls
-    8  ls -ltr
-    9  cd ..
-   10  cp -a rockchip/ rockchip/
-   11  cp -a rockchip/ rockchip_save
-   12  cp -a rockchip/ ~/rockchip_save
-   13  sync
-   14  cd
-   15  pwd
-   16  cd /root
-   17  ls
-   18  cd rockchip_save/
-   19  ls
-   20  cd
-   21  uname -a
-   22  pacman -Syu
-   23  pacman-key --init
-   24  pacman-key --populate archlinuxarm
-   25  pacman -Syu
-   26  cd /boot/dtbs/
-   27  ls
-   28  cd rockchip
-   29  ls
-   30  ls -l
-   31  pwd
-   32  ls -l /root/rockchip_save/
-   33  ls -l rk3328
-   34  ls -l rk3328*
-   35  ip a
-   36  dhcpcd 
-   37  uname -a
-   38  reboot
-   39  dhcpcd 
-   40  ls
-   41  cd /boot/dtbs/
-   42  ls
-   43  cd rockchip
-   44  ls -l
-   45  ls -l rk3328-rock64.dtb 
-   46  ls -l /root/rockchip_save/rk3328-rock64.dtb 
-   47  cp /boot/dtbs/rockchip/rk3328-rock64.dtb /boot/dtbs/rockchip/rk3328-rock64.dtb_save 
-   48  cp /root/rockchip_save/rockchip/rk3328-rock64.dtb /boot/dtbs/rockchip/rk3328-rock64.dtb
-   49  lsusb
-   50  uname -a
-   51  uname -a
-   52  uname -a
-   53  reboot
-   54  lsusb
-   55  fdisk -ll
-   56  fdisk /dev/sda
-   57  lsblk
-   58  blkid 
-   59  pvcreate /dev/sda2
-   60  vgcreate Vol /dev/sda2
-   61  lvcreate -L 10G -n root Vol
-   62  lvcreate -L 500M -n swap Vol
-   63  lvcreate -L 10G -n home Vol
-   64  cryptsetup luksFormat -c aes-xts-plain64 -s 512 /dev/mapper/Vol-root
-   65  cryptsetup luksFormat -c aes-xts-plain64 -s 512 /dev/mapper/Vol-root
-   66  cryptsetup luksFormat -c aes-xts-plain64 -s 512 /dev/mapper/Vol-root
-   67* cryptsetup open /dev/mapper/Vol-root root
-   68  mkfs.ext4 /dev/mapper/root
-   69  mkfs.vfat -F32 /dev/sda1
-   70  pacman -S mkfs.vfat
-   71  pacman -S dosfstools
-   72  mkfs.vfat -F32 /dev/sda1
-   73  mount /dev/mapper/root /mnt
-   74  mkdir /mnt/boot
-   75  mount /dev/sda1 /mnt/boot
-   76  vgdisplay 
-   77  lvdisplay 
-   78  cd /mnt/home
-   79  cd /mnt
-   80  ls
-   81  mkdir home
-   82  cd
-   83  pacstrap -i /mnt base base-devel
-   84  pacman-key --init
-   85  pacman-key --populate archlinuxarm
-   86  pacman -Syu
-   87  which pacstrap
-   88  pacman -S arch-install-scripts
-   89  pacstrap -i /mnt base base-devel
-
-
-
- 127  vi /boot/loader/entries/arch-encrypted.conf 
-  128  vi /boot/loader/entries/arch-encrypted.conf 
-  129  vi /etc/mkinitcpio.conf 
-  130  vi /etc/mkinitcpio.conf 
-  131  CD
-  132  cd
-  133  mkdir -m 700 /etc/luks-keys
-  134  dd if=/dev/random of=/etc/luks-keys/home bs=1 count=256 status=progress
-  135  ls -l /etc/luks-keys/home 
-  136  cat /etc/luks-keys/home 
-  137  cryptsetup luksFormat -c aes-xts-plain64 -s 512 /dev/mapper/Vol-home
-  138  cryptsetup luksAddKey /dev/mapper/Vol-home /etc/luks-keys/home
-  139  cryptsetup -d /etc/luks-keys/home open /dev/Vol/home home
-  140  mkfs.ext4 /dev/mapper/home
-  141  mount /dev/mapper/home /home
-  142  cd home
-  143  cd /home/
-  144  df -k .
-  145  ls
-  146  vi /etc/crypttab
-  147  vi /etc/fstab 
-  148  genfstab -U
-  149  genfstab -U /
-  150  genfstab -U -�p /
-  151  genfstab -U -p /
-  152  genfstab -U -p / >/etc/fstab
-  153  history 
-
 ```

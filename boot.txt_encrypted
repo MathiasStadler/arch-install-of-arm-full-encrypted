@@ -1,0 +1,32 @@
+echo "Boot script loaded from ${devtype} ${devnum}.${bootpart} uuid=${uuid} distro_bootpart=${distro_bootpart}"
+
+
+# MAC address (use spaces instead of colons)
+setenv macaddr da 19 c8 7a 6d f4
+
+part uuid ${devtype} ${devnum}:${bootpart}:2 uuid
+
+
+echo "uuid => ${uuid}"
+
+setenv bootargs console=ttyS2,1500000 root=UUID=dcedb507-87e3-409e-9e6f-c357296b6da4 rw rootwait earlycon=uart8250,mmio32,0xff130000
+setenv fdtfile rockchip/rk3328-rock64.dtb
+
+echo "load ${devtype} ${devnum}:${bootpart} ${kernel_addr_r} Image"
+
+if load ${devtype} ${devnum}:${bootpart} ${kernel_addr_r} Image; then
+echo "load ${devtype} ${devnum}:${bootpart} ${fdt_addr_r} dtbs/${fdtfile}"
+
+  if load ${devtype} ${devnum}:${bootpart} ${fdt_addr_r} dtbs/${fdtfile}; 
+then
+    fdt addr ${fdt_addr_r}
+    fdt resize
+    fdt set /ethernet@ff540000 local-mac-address "[${macaddr}]"
+    echo "load ${devtype} ${devnum}:${bootpart} ${ramdisk_addr_r} initramfs-linux.img"
+    if load ${devtype} ${devnum}:${bootpart} ${ramdisk_addr_r} initramfs-linux.img; then
+      booti ${kernel_addr_r} ${ramdisk_addr_r}:${filesize} ${fdt_addr_r};
+    else
+      booti ${kernel_addr_r} - ${fdt_addr_r};
+    fi;
+  fi;
+fi

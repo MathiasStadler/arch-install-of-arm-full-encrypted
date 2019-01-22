@@ -27,6 +27,10 @@ https://raspberrypi.stackexchange.com/questions/67051/raspberry-pi-3-with-archar
 
 # another sample for installation script
 https://gist.github.com/rasschaert/0bb7ebc506e26daee585
+
+
+# mkinitcpio replace udev with systemd
+https://bbs.archlinux.org/viewtopic.php?id=243253&p=2
 ```
 
 ## presteps
@@ -48,7 +52,7 @@ echo "Boot script loaded from ${devtype} ${devnum} distro_bootpart=${distro_boot
 
 ```bash
 
-###SCRIPT_START###
+###SCRIPT_START_STEP1###
 
 #!/bin/bash
 
@@ -64,8 +68,12 @@ export LVM_DEVICE="/dev/sda2"
 
 # delete device we used just overwrite with 0
 # if you have used device delete the old data carefully :-)
-dd if=/dev/zero of=/dev/sda bs=4M status=progress count=32| sync
+dd if=/dev/zero of=/dev/sda bs=4M status=progress count=64| sync
 
+sync
+
+echo "sleep 10 second before we will start the next steps"
+sleep 10
 
 # create two filesystem for boot and encrypted root
 fdisk /dev/sda <<EOF
@@ -73,14 +81,14 @@ o
 n
 p
 1
-
-+2048M
+32768
+4227071
 t
 83
 n
 p
 2
-
+4227072
 
 t
 2
@@ -89,6 +97,22 @@ p
 w
 EOF
 
+echo "Please reboot before you start step2 !"
+
+###SCRIPT_END_STEP1###
+
+###SCRIPT_START_STEP2###
+
+#!/bin/bash
+
+set -e
+
+export LUKS_PASSWD="password"
+export ROOT_PASSWD="password"
+export TIME_ZINE="EUROPE/BERLIN"
+export HOSTNAME="ENCRYPTED_ROCK64"
+export VOL_NAME="Vol"
+export LVM_DEVICE="/dev/sda2"
 
 # create lvm
 pvcreate $LVM_DEVICE
@@ -144,12 +168,14 @@ mkinitcpio -p  linux-aarch64
 echo "Setting root password"
 echo "root:${ROOT_PASSWD}" | chpasswd
 EOF
+###SCRIPT_END_STEP2###
 
 
-###SCRIPT_END###
 
-# get script to single file
-sed -n '/^###SCRIPT_START###/,/^###SCRIPT_END###/p' README.md >arch-install-encrypted-os.sh
+# get script into script file
+sed -n '/^###SCRIPT_START_STEP1###/,/^###SCRIPT_END_STEP1###/p' README.md >arch-install-encrypted-STEP-1.sh
+
+sed -n '/^###SCRIPT_START_STEP2###/,/^###SCRIPT_END_STEP2###/p' README.md >arch-install-encrypted-STEP-2.sh
 
 ```
 

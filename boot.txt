@@ -4,8 +4,19 @@ echo "Boot script loaded from ${devtype} ${devnum}.${bootpart} uuid=${uuid} dist
 # MAC address (use spaces instead of colons)
 setenv macaddr da 19 c8 7a 6d f4
 
-part uuid ${devtype} ${devnum}:${bootpart} uuid
-setenv bootargs console=ttyS2,1500000 root=PARTUUID=${uuid} rw rootwait earlycon=uart8250,mmio32,0xff130000
+# Set root partition to the first partion of boot device
+# part uuid ${devtype} ${devnum}:${bootpart} uuid
+# Set root partition to the second partition of boot device
+part uuid ${devtype} ${devnum}:2 uuid
+
+
+
+# setenv bootargs console=ttyS2,1500000 root=PARTUUID=${uuid} rw rootwait earlycon=uart8250,mmio32,0xff130000
+
+setenv bootargs console=ttyGS0,115200 console=${console} ip=192.168.178.10::192.168.178.1:255.255.255.0:pi:eth0:none cryptdevice=/dev/sda2:root root=/dev/mapper/root rw rootwait loglevel=5
+
+
+
 setenv fdtfile rockchip/rk3328-rock64.dtb
 
 echo "load ${devtype} ${devnum}:${bootpart} ${kernel_addr_r} /boot/Image"

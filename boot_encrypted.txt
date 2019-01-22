@@ -1,0 +1,20 @@
+# After modifying, run ./mkscr
+
+
+# MAC address (use spaces instead of colons)
+setenv macaddr da 19 c8 7a 6d f4
+
+# Set root partition to the second partition of boot device
+#part uuid ${devtype} ${devnum}:2 uuid
+
+setenv bootargs console=ttyGS0,115200 console=${console} ip=192.168.0.10::192.168.0.1:255.255.255.0:pi:eth0:none cryptdevice=/dev/mmcblk0p3:root root=/dev/mapper/root rw rootwait loglevel=5
+
+if load ${devtype} ${devnum}:${bootpart} ${kernel_addr_r} /Image; then
+  if load ${devtype} ${devnum}:${bootpart} ${fdt_addr_r} /dtbs/${fdtfile}; then
+    if load ${devtype} ${devnum}:${bootpart} ${ramdisk_addr_r} /initramfs-linux.img; then
+      booti ${kernel_addr_r} ${ramdisk_addr_r}:${filesize} ${fdt_addr_r};
+    else
+      booti ${kernel_addr_r} - ${fdt_addr_r};
+    fi;
+  fi;
+fi

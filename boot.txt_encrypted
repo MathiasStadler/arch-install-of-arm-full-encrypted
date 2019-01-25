@@ -9,7 +9,7 @@ part uuid ${devtype} ${devnum}:${bootpart}:2 uuid
 
 echo "uuid => ${uuid}"
 
-setenv bootargs console=ttyS2,1500000 root=UUID=dcedb507-87e3-409e-9e6f-c357296b6da4 rw rootwait earlycon=uart8250,mmio32,0xff130000
+setenv bootargs console=ttyS2,1500000 root=UUID=LVM_ROOT_MAPPER_UUID rw rootwait earlycon=uart8250,mmio32,0xff130000
 setenv fdtfile rockchip/rk3328-rock64.dtb
 
 echo "load ${devtype} ${devnum}:${bootpart} ${kernel_addr_r} Image"

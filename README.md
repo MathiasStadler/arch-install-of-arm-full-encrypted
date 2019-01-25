@@ -76,16 +76,12 @@ https://gist.github.com/rasschaert/0bb7ebc506e26daee585
 
 # mkinitcpio replace udev with systemd
 https://bbs.archlinux.org/viewtopic.php?id=243253&p=2
+
+# tinyssh
+https://tinyssh.org/install.html
 ```
 
-## boot.scr
-
-```bash
-# add for verbose
-echo "Boot script loaded from ${devtype} ${devnum} distro_bootpart=${distro_bootpart}"
-```
-
-## script
+## scripts
 
 ```bash
 
@@ -97,6 +93,7 @@ set -e
 
 export LUKS_PASSWD="password"
 export ROOT_PASSWD="password"
+export TINYSSH_PASSWORD="password"
 export TIME_ZINE="EUROPE/BERLIN"
 export HOSTNAME="ENCRYPTED_ROCK64"
 export VOL_NAME="Vol"
@@ -133,7 +130,10 @@ p
 w
 EOF
 
-echo "Please reboot before you start step2 !"
+echo "check output from the last fdisk command"
+echo " on some device is a reboot necessary"
+echo " check careful the status and in any unclear cases REBOOT :-)"
+echo " start step2 "
 
 ###SCRIPT_END_STEP1###
 
@@ -145,6 +145,7 @@ set -e
 
 export LUKS_PASSWD="password"
 export ROOT_PASSWD="password"
+export TINYSSH_PASSWORD="password"
 export TIME_ZINE="EUROPE/BERLIN"
 export HOSTNAME="ENCRYPTED_ROCK64"
 export VOL_NAME="Vol"
@@ -179,7 +180,13 @@ mount /dev/sda1 /mnt/boot
 pacman -S  --noconfirm rsync
 
 # copy os to encrypted /root and mounted /boot
- rsync -aAXv /* /mnt --exclude={/dev/*,/proc/*,/sys/*,/tmp/*,/var/tmp/*,/run/*,/mnt/*,/media/*,/lost+found}
+rsync -aAXv /* /mnt --exclude={/dev/*,/proc/*,/sys/*,/tmp/*,/var/tmp/*,/run/*,/mnt/*,/media/*,/lost+found}
+
+# copy boot.txt_encrypted to /mnt/boot
+cp ./boot.txt_encrypted /mnt/boot
+
+# copy mksrc.sh to /mnt/boot
+cp ./mksrc.sh /mnt/boot
 
 # enter chroot
 arch-chroot /mnt /bin/bash <<EOF
@@ -189,7 +196,7 @@ locale-gen
 export LANG=en_US.UTF-8
 echo "LANG=en_US.UTF-8" >> /etc/locale.conf
 echo "Setting time zone"
-# delete old link
+# delete old link is there
 rm -f /etc/localtime
 ln -s /usr/share/zoneinfo/$TIME_ZONE /etc/localtime
 echo "Setting hostname"
@@ -200,7 +207,104 @@ sed -i 's/^HOOKS.*/HOOKS="base udev autodetect modconf block encrypt lvm2 filesy
 mkinitcpio -p  linux-aarch64
 echo "Setting root password"
 echo "root:${ROOT_PASSWD}" | chpasswd
+# found UUID from Vol-root
+VOL_ROOT_UUID=$(blkid | sed -n '/Vol-root/s/.*UUID=\"\([^\"]*\)\".*/\1/p')
+echo "Vol-root UUID => ${VOL_ROOT_UUID}"
+echo "replace the UUID in boot.txt"
+sed -i "s/LVM_ROOT_MAPPER_UUID/${VOL_ROOT_UUID}/" /boot/boot.txt
+echo "create boot.scr"
+cd boot && ./mksrc.sh
+
+# default user for sd card
+username="alarm"
+
+# install sudo
+pacman -Sy sudo
+
+# add user to group wheel
+sed -i 's/^# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers
+
+# add alarm ( default user from sd-card ) to group wheel
+usermod -a -G wheel alarm
+
+# switch user to  $username
+su $username
+
+# install package from default repository for make packages from AUR
+sudo pacman -S binutils gcc pkg-config make fakeroot patch
+
+# crate dir for build something
+mkdir ~/build
+
+# build package package-query
+cd ~/build
+curl -O https://aur.archlinux.org/cgit/aur.git/snapshot/package-query.tar.gz
+tar -xvzf package-query.tar.gz
+cd package-query
+makepkg -si --noconfirm
+
+# build package yaourt
+cd ~/build
+curl -O https://aur.archlinux.org/cgit/aur.git/snapshot/yaourt.tar.gz
+tar -xvzf yaourt.tar.gz
+cd yaourt
+makepkg -si --noconfirm
+
+
+# enable  ucspi mkinitcpio-wrapper for aarch64
+# a HACK default not enable for architecture aarch64
+cd ~/build/
+git clone https://aur.archlinux.org/ucspi-tcp.git
+cd ucspi-tcp
+# add aarch in the line arch to the other architecture
+sed -i 's/^arch.*$/arch=(\x27i686\x27 \x27x86_64\x27 \x27aarch64\x27)/' PKGBUILD
+makepkg -si --noconfirm
+
+# install mkinitcpio wrapper from AUR
+cd ~/build
+yaourt -S --noconfirm mkinitcpio-utils mkinitcpio-netconf mkinitcpio-tinyssh
+
+# switch back to root
+exit
+
+# prepare tinyssh kez
+# ATTENTION /tmp will be delete after each reboot we wont that :-)
+mkdir -p /tmp/tinyssh
+# passphrase = password
+ssh-keygen -t ed25519  -C "kez for tinyssh" -P "${TINYSSH_PASSWORD}" -f "/tmp/tinyssh/kez" -q
+# add key 
+grep ssh-ed25519:* /tmp/tinyssh/kez.pub |sudo tee -a /etc/tinyssh/root_key
+# protect kez :-?
+chmod 0400 /etc/tinyssh/root_key
+chmod 0400 /etc/tinyssh/
+
+echo "ATTENTION Don't forget save your private kez "
+
+# add hooks for prepare initramfs
+sudo sed -i 's/^\(HOOKS=.*\)encrypt\(.*\)$/\1netconf tinyssh encryptssh\2/' /etc/mkinitcpio.conf
+
+# make new initramfs
+mkinitcpio -p linux-aarch64
+
+# add ip=dhcp to setenvbootcmds in boot.scr file
+# necessary for tinyssh ip during the boot phase
+sudo sed -i 's/^setenv bootargs\(.*\)$/& ip=dhcp/' /boot/boot.txt
+
+# create boot.scr
+cd /boot && ./mksrc.sh
+
+# sync
+sync
+
+# leave arch_chroot
+exit
+
 EOF
+
+
+# cross the finger and reboot
+shutdown -Fr now
+
 ###SCRIPT_END_STEP2###
 
 # get script into script file
@@ -210,7 +314,7 @@ sed -n '/^###SCRIPT_START_STEP2###/,/^###SCRIPT_END_STEP2###/p' README.md >arch-
 
 ```
 
-## mount encrypted devices
+## mount encrypted devices if you start from sd card - rescue boot
 
 ```bash
 LUKS_PASSWD="password"
@@ -218,4 +322,16 @@ VOL_NAME="Vol"
 echo -n $LUKS_PASSWD |cryptsetup open /dev/mapper/$VOL_NAME-root root -
 mount /dev/mapper/root /mnt
 mount /dev/sda1 /mnt/boot/
+```
+
+## encrypt volume via tinyssh
+
+```bash
+# login
+ssh -i kez root@<ip from sbc>
+
+#search for ip from sbc
+# nmap -sn <network >/<netmask>
+nmap -sn 192.168.178.0/24
+
 ```

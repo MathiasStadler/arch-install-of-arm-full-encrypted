@@ -38,6 +38,7 @@
         "mkfs",
         "mkinitcpio",
         "modconf",
+        "nameserver",
         "noconfirm",
         "pacman",
         "pacmann",

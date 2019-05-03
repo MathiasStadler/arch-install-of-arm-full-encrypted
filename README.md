@@ -2,9 +2,10 @@
 
 - e.g. on rock64
 
-[ ] with dropbear
+[x] with tinyssh
 [x] lvm
 [x] luks
+[ ] static ip
 
 ## TL;DR
 
@@ -79,6 +80,9 @@ https://bbs.archlinux.org/viewtopic.php?id=243253&p=2
 
 # tinyssh
 https://tinyssh.org/install.html
+
+# arch network w/o networkmanager
+https://wiki.archlinux.de/title/Statische_IP
 ```
 
 ## scripts
@@ -98,6 +102,10 @@ export TIME_ZINE="EUROPE/BERLIN"
 export HOSTNAME="ENCRYPTED_ROCK64"
 export VOL_NAME="Vol"
 export LVM_DEVICE="/dev/sda2"
+export ETH0_STATIC_IP="192.168.178.250"
+export ETH0_CIDR="24"
+export ETH0_NETMASK="255.255.255.0"
+export ETH0_GATEWAY="192.168.178.1"
 
 # delete device we used just overwrite with 0
 # if you have used device delete the old data carefully :-)
@@ -150,6 +158,11 @@ export TIME_ZINE="EUROPE/BERLIN"
 export HOSTNAME="ENCRYPTED_ROCK64"
 export VOL_NAME="Vol"
 export LVM_DEVICE="/dev/sda2"
+export ETH0_STATIC_IP="192.168.178.250"
+export ETH0_CIDR="24"
+export ETH0_NETMASK="255.255.255.0"
+export ETH0_GATEWAY="192.168.178.1"
+export ETH0_DNS_1="192.168.178.245"
 
 # create lvm
 pvcreate $LVM_DEVICE
@@ -286,12 +299,39 @@ sudo sed -i 's/^\(HOOKS=.*\)encrypt\(.*\)$/\1netconf tinyssh encryptssh\2/' /etc
 # make new initramfs
 mkinitcpio -p linux-aarch64
 
+
+# build BOOT_NETWORK_CONFIG for bootargs
+#BOOT_NETWORK_CONFIG="ip=192.168.0.10::192.168.0.1:255.255.255.0:pi:eth0:none"
+BOOT_NETWORK_CONFIG="ip=$ETH0_STATIC_IP::$ETH0_GATEWAY:$ETH0_NETMASK:$HOSTNAME:eth0:none"
 # add ip=dhcp to setenvbootcmds in boot.scr file
 # necessary for tinyssh ip during the boot phase
-sudo sed -i 's/^setenv bootargs\(.*\)$/& ip=dhcp/' /boot/boot.txt
-
+# sudo sed -i 's/^setenv bootargs\(.*\)$/& ip=dhcp/' /boot/boot.txt
+sudo sed -i "s/^setenv bootargs\(.*\)$/& $BOOT_NETWORK_CONFIG/" /boot/boot.txt
 # create boot.scr
 cd /boot && ./mksrc.sh
+
+
+echo "# kiss approach"
+echo "# NO any network manager"
+echo "# NO resolve services "
+systemctl stop dbus-org.freedesktop.network1.service
+systemctl disable dbus-org.freedesktop.network1.service
+systemctl stop dbus-org.freedesktop.resolve1.service
+systemctl disable dbus-org.freedesktop.resolve1.service
+
+# remove link if there for  /etc/resolv.conf
+rm -rf  /etc/resolv.conf
+
+# write new one
+echo "nameserver $ETH0_DNS_1" | tee -a /etc/resolv.conf
+
+
+
+# TODO to be check
+systemctl disable dbus-org.freedesktop.timesync1.service
+
+
+
 
 # sync
 sync
@@ -300,6 +340,9 @@ sync
 exit
 
 EOF
+
+
+
 
 
 # cross the finger and reboot
@@ -335,3 +378,24 @@ ssh -i kez root@<ip from sbc>
 nmap -sn 192.168.178.0/24
 
 ```
+
+
+## steps
+default via 192.168.178.1 dev eth0 proto static 
+192.168.178.0/24 dev eth0 proto kernel scope link src 192.168.178.250 
+
+
+# disabkle dhcp services
+
+# nicht vergessen
+rm /etc/system/network/ snXXXX
+  491  systemctl list-unit-files | grep enabled
+  492  systemctl disable dbus-org.freedesktop.network1.service
+  493  systemctl disable dbus-org.freedesktop.resolve1.service
+  494  systemctl disable dbus-org.freedesktop.timesync1.service
+  495  systemctl list-unit-files | grep enabled
+  496  systemctl disable remote-fs.target
+  497  systemctl disable dbus-org.freedesktop.timesync1.service
+  498  systemctl list-unit-files | grep enabled
+  502  history |grep systemctl
+[root@ENCRYPTED_ROCK64 alarm]# 
